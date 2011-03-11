@@ -98,6 +98,7 @@ def review(ui, repo, *args, **opts):
     username = ui.config('review', 'username')
     if not username:
         username = rietveld.GetEmail(ui)
+        ui.setconfig('review', 'username', username)
     host_header = ui.config('review', 'host_header')
     account_type = ui.config('review', 'account_type', 'GOOGLE')
     rpc_server = GetRpcServer(server, username, host_header, True, account_type)
