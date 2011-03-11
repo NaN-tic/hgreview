@@ -17,8 +17,10 @@ def review(ui, repo, *args, **opts):
     modified, added, removed, deleted, unknown, ignored, clean = \
             repo.status(node1, node2, unknown=True)
     if unknown:
-        prompt = "Are you sure to continue? (y/N) "
-        cont = ui.prompt(prompt, 'N')
+        ui.status('The following files are not added to version control:', '\n\n')
+        for filename in unknown:
+            ui.status(filename, '\n')
+        cont = ui.prompt("\nAre you sure to continue? (y/N) ", 'N')
         if cont.lower() not in ('y', 'yes'):
             sys.exit(0)
 
