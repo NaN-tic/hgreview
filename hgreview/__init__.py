@@ -85,7 +85,7 @@ def review(ui, repo, *args, **opts):
     issue_file = os.path.join(repo.root, '.hg', 'review_id')
     if os.path.isfile(issue_file):
         prompt = "Message describing this patch set: "
-        issue_id = open(issue_file, 'r').read()
+        issue_id = open(issue_file, 'r').read().strip()
     else:
         prompt = "New issue subject: "
         issue_id = None
