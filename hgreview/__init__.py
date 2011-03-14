@@ -113,8 +113,8 @@ def review(ui, repo, *args, **opts):
     form_fields = [('subject', message)]
     if issue_id:
         form_fields.append(('issue', issue_id))
-    #if username:
-    #    form_fields.append(('user', username))
+    if username:
+        form_fields.append(('user', username))
     if opts['reviewers']:
         for reviewer in opts['reviewers']:
             CheckReviewer(reviewer)
