@@ -169,6 +169,6 @@ cmdtable = {
         ('r', 'reviewers', [], 'Add reviewers'),
         ('i', 'issue', '', 'Issue number. Defaults to new issue'),
         ('', 'rev', '', 'Revision number to diff against'),
-        ('', 'send_mail', None, 'Send notification email to reviewers'),
+        ('', 'send_email', None, 'Send notification email to reviewers'),
     ], "hg review [options]"),
 }
