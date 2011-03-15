@@ -225,7 +225,7 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
         local_email = email
         if local_email is None:
             local_email = GetEmail("Email (login for uploading to %s)" % server)
-        password = ui.prompt('Password for %s:' % local_email, None)
+        password = ui.getpass('Password for %s:' % local_email, None)
         return (local_email, password)
 
     return rpc_server_class(server,
