@@ -109,7 +109,8 @@ def review(ui, repo, *args, **opts):
         ui.setconfig('review', 'username', username)
     host_header = ui.config('review', 'host_header')
     account_type = ui.config('review', 'account_type', 'GOOGLE')
-    rpc_server = GetRpcServer(server, username, host_header, True, account_type)
+    rpc_server = GetRpcServer(server, username, host_header, True, account_type,
+        ui)
     form_fields = [('subject', message)]
     if issue_id:
         form_fields.append(('issue', issue_id))

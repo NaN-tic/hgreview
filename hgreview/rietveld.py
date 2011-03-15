@@ -3,6 +3,7 @@
 # This file contains code from upload.py python script to upload on rietveld
 # servers licensed under the apache license v2.0 (c) Google Inc.
 import os
+import urllib
 import urllib2
 import cookielib
 import logging
@@ -181,7 +182,7 @@ def GetEmail(ui):
     return email
 
 def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
-                 account_type=AUTH_ACCOUNT_TYPE):
+                 account_type=AUTH_ACCOUNT_TYPE, ui=None):
     """Returns an instance of an AbstractRpcServer.
 
     Args:
@@ -212,7 +213,7 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
             extra_headers={"Cookie":
                 'dev_appserver_login="%s:False"' % email},
             save_cookies=save_cookies,
-            account_type=account_type)
+            account_type=account_type, ui=ui)
         # Don't try to talk to ClientLogin.
         server.authenticated = True
         return server
@@ -224,18 +225,28 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
         local_email = email
         if local_email is None:
             local_email = GetEmail("Email (login for uploading to %s)" % server)
-        return (local_email, None)
+        password = ui.prompt('Password for %s:' % local_email, None)
+        return (local_email, password)
 
     return rpc_server_class(server,
         GetUserCredentials, host_override=host_override,
-        save_cookies=save_cookies)
+        save_cookies=save_cookies, ui=ui)
+
+
+class ClientLoginError(urllib2.HTTPError):
+  """Raised to indicate there was an error authenticating with ClientLogin."""
+
+  def __init__(self, url, code, msg, headers, args):
+    urllib2.HTTPError.__init__(self, url, code, msg, headers, None)
+    self.args = args
+    self.reason = args["Error"]
 
 
 class AbstractRpcServer(object):
     """Provides a common interface for a simple RPC server."""
 
     def __init__(self, host, auth_function, host_override=None, extra_headers={},
-                 save_cookies=False, account_type=AUTH_ACCOUNT_TYPE):
+                 save_cookies=False, account_type=AUTH_ACCOUNT_TYPE, ui=None):
         """Creates a new HttpRpcServer.
 
         Args:
@@ -262,6 +273,7 @@ class AbstractRpcServer(object):
         self.save_cookies = save_cookies
         self.account_type = account_type
         self.opener = self._GetOpener()
+        self.ui = ui
         if self.host_override:
             logging.info("Server: %s; Host: %s", self.host, self.host_override)
         else:
@@ -374,34 +386,35 @@ class AbstractRpcServer(object):
                 auth_token = self._GetAuthToken(credentials[0], credentials[1])
             except ClientLoginError, e:
                 if e.reason == "BadAuthentication":
-                    print >>sys.stderr, "Invalid username or password."
+                    self.ui.status("Invalid username or password.", '\n')
                     continue
                 if e.reason == "CaptchaRequired":
-                    print >>sys.stderr, (
+                    self.ui.status(
                         "Please go to\n"
                         "https://www.google.com/accounts/DisplayUnlockCaptcha\n"
                         "and verify you are a human.  Then try again.\n"
                         "If you are using a Google Apps account the URL is:\n"
-                        "https://www.google.com/a/yourdomain.com/UnlockCaptcha")
+                        "https://www.google.com/a/yourdomain.com/UnlockCaptcha\n")
                     break
                 if e.reason == "NotVerified":
-                    print >>sys.stderr, "Account not verified."
+                    self.ui.status("Account not verified.", '\n')
                     break
                 if e.reason == "TermsNotAgreed":
-                    print >>sys.stderr, "User has not agreed to TOS."
+                    self.ui.status("User has not agreed to TOS.", '\n')
                     break
                 if e.reason == "AccountDeleted":
-                    print >>sys.stderr, "The user account has been deleted."
+                    self.ui.status("The user account has been deleted.", '\n')
                     break
                 if e.reason == "AccountDisabled":
-                    print >>sys.stderr, "The user account has been disabled."
+                    self.ui.status("The user account has been disabled.", '\n')
                     break
                 if e.reason == "ServiceDisabled":
-                    print >>sys.stderr, ("The user's access to the service has been "
-                        "disabled.")
+                    self.ui.status("The user's access to the service has been ",
+                        "disabled.\n")
                     break
                 if e.reason == "ServiceUnavailable":
-                    print >>sys.stderr, "The service is not available; try again later."
+                    self.ui.status("The service is not available; try again"
+                        " later.\n")
                     break
                 raise
             self._GetAuthCookie(auth_token)
