@@ -160,7 +160,7 @@ def review(ui, repo, *args, **opts):
     if not uploaded_diff_file:
         patches = UploadSeparatePatches(issue_id, rpc_server, patchset, data, ui)
     UploadBaseFiles(issue_id, rpc_server, patches, patchset, username, files, ui)
-    if opts['send_mail'] or ui.configbool('review', 'send_email'):
+    if opts['send_email'] or ui.configbool('review', 'send_email'):
         rpc_server.Send('/%s/mail' % issue_id, payload='')
 
 # Add option for description, private
