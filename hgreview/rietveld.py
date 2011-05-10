@@ -64,6 +64,47 @@ def UploadBaseFiles(issue, rpc_server, patch_list, patchset, username, files, ui
         if new_content != None:
             UploadFile(filename, file_id, new_content, is_binary, status, False)
 
+# NOTE: The SplitPatch function is duplicated in engine.py, keep them in sync.
+def SplitPatch(data):
+    """Splits a patch into separate pieces for each file.
+
+    Args:
+        data: A string containing the output of svn diff.
+
+    Returns:
+        A list of 2-tuple (filename, text) where text is the svn diff output
+        pertaining to filename.
+    """
+    patches = []
+    filename = None
+    diff = []
+    for line in data.splitlines(True):
+        new_filename = None
+        if line.startswith('Index:'):
+            unused, new_filename = line.split(':', 1)
+            new_filename = new_filename.strip()
+        elif line.startswith('Property changes on:'):
+            unused, temp_filename = line.split(':', 1)
+            # When a file is modified, paths use '/' between directories, however
+            # when a property is modified '\' is used on Windows.  Make them the same
+            # otherwise the file shows up twice.
+            temp_filename = temp_filename.strip().replace('\\', '/')
+            if temp_filename != filename:
+                # File has property changes but no modifications, create a new diff.
+                new_filename = temp_filename
+        if new_filename:
+            if filename and diff:
+                patches.append((filename, ''.join(diff)))
+            filename = new_filename
+            diff = [line]
+            continue
+        if diff is not None:
+            diff.append(line)
+    if filename and diff:
+        patches.append((filename, ''.join(diff)))
+    return patches
+
+
 def UploadSeparatePatches(issue, rpc_server, patchset, data, ui):
     """Uploads a separate patch for each file in the diff output.
 

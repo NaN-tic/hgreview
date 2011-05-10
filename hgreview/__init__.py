@@ -13,7 +13,8 @@ from rietveld import (GetEmail, GetRpcServer, CheckReviewer, MAX_UPLOAD_SIZE,
     EncodeMultipartFormData, UploadSeparatePatches, UploadBaseFiles)
 
 def review(ui, repo, *args, **opts):
-    node1, node2 = cmdutil.revpair(repo, opts['rev'])
+    revs = [opts['rev']] if opts['rev'] else []
+    node1, node2 = cmdutil.revpair(repo, revs)
     modified, added, removed, deleted, unknown, ignored, clean = \
             repo.status(node1, node2, unknown=True)
     if unknown:
