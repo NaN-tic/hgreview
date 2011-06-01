@@ -12,7 +12,27 @@ from mercurial import commands, cmdutil, patch, mdiff, copies, node
 from rietveld import (GetEmail, GetRpcServer, CheckReviewer, MAX_UPLOAD_SIZE,
     EncodeMultipartFormData, UploadSeparatePatches, UploadBaseFiles)
 
+def _get_issue_file(repo):
+    return os.path.join(repo.root, '.hg', 'review_id')
+
+def _get_issue_id(repo):
+    issue_file = _get_issue_file(repo)
+    if os.path.isfile(issue_file):
+        return open(issue_file, 'r').read().strip()
+
+def _get_server(ui):
+    return ui.config('review', 'server',
+        default='http://codereview.appspot.com')
+
 def review(ui, repo, *args, **opts):
+    if opts['id'] or opts['url']:
+        issue_id = _get_issue_id(repo) or ''
+        msg = '%s' % issue_id
+        if opts['url']:
+            server = _get_server(ui)
+            msg = '%s/%s/' % (server, msg)
+        ui.status(msg, '\n')
+        return
     revs = [opts['rev']] if opts['rev'] else []
     node1, node2 = cmdutil.revpair(repo, revs)
     modified, added, removed, deleted, unknown, ignored, clean = \
@@ -85,23 +105,18 @@ def review(ui, repo, *args, **opts):
         is_binary = "\0" in oldcontent
         files[filename] = (oldcontent, newcontent, is_binary, 'R')
 
-    server = ui.config('review', 'server',
-        default='http://codereview.appspot.com')
+    server = _get_server(ui)
     ui.status('Server used %s' % server, '\n')
 
-    issue_file = os.path.join(repo.root, '.hg', 'review_id')
-    if opts['issue']:
+    issue_file = _get_issue_file(repo)
+    issue_id = _get_issue_id(repo) or opts['issue']
+    if issue_id:
         if not os.path.isfile(issue_file):
-            open(issue_file, 'w').write(opts['issue'])
+            open(issue_file, 'w').write(issue_id)
             ui.status('Creating %s file' % issue_file, '\n')
         prompt = "Message describing this patch set:"
-        issue_id = opts['issue']
-    elif os.path.isfile(issue_file):
-        issue_id = open(issue_file, 'r').read().strip()
-        prompt = "Message describing this patch set of issue %s:" % issue_id
     else:
         prompt = "New issue subject:"
-        issue_id = None
     message = ui.prompt(prompt, '')
     if not message:
         sys.exit(1)
@@ -174,5 +189,7 @@ cmdtable = {
         ('i', 'issue', '', 'Issue number. Defaults to new issue'),
         ('', 'rev', '', 'Revision number to diff against'),
         ('', 'send_email', None, 'Send notification email to reviewers'),
+        ('', 'id', None, 'ouput issue id'),
+        ('', 'url', None, 'ouput issue URL'),
     ], "hg review [options]"),
 }
