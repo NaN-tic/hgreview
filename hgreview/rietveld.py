@@ -210,7 +210,7 @@ def GetEmail(ui):
             prompt += " [%s]" % last_email
         except IOError, e:
             pass
-    email = ui.prompt(prompt + ': ', last_email)
+    email = ui.prompt(prompt + ':', last_email)
     if email:
         try:
             last_email_file = open(last_email_file_name, "w")
@@ -266,7 +266,7 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
         local_email = email
         if local_email is None:
             local_email = GetEmail("Email (login for uploading to %s)" % server)
-        password = ui.getpass('Password for %s:' % local_email, None)
+        password = ui.getpass('Password for %s: ' % local_email, None)
         return (local_email, password)
 
     return rpc_server_class(server,
