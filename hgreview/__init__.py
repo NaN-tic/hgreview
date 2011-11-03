@@ -6,8 +6,7 @@ import re
 import sys
 from hashlib import md5
 
-from mercurial import hg
-from mercurial import commands, cmdutil, patch, mdiff, copies, node
+from mercurial import scmutil, patch, mdiff, copies, node
 
 from rietveld import (GetEmail, GetRpcServer, CheckReviewer, MAX_UPLOAD_SIZE,
     EncodeMultipartFormData, UploadSeparatePatches, UploadBaseFiles)
@@ -34,7 +33,7 @@ def review(ui, repo, *args, **opts):
         ui.status(msg, '\n')
         return
     revs = [opts['rev']] if opts['rev'] else []
-    node1, node2 = cmdutil.revpair(repo, revs)
+    node1, node2 = scmutil.revpair(repo, revs)
     modified, added, removed, deleted, unknown, ignored, clean = \
             repo.status(node1, node2, unknown=True)
     if unknown:
@@ -82,21 +81,21 @@ def review(ui, repo, *args, **opts):
         files[newname] = (oldcontent, newcontent, is_binary, 'M')
 
     # modified files
-    for filename in cmdutil.matchfiles(repo, modified):
+    for filename in scmutil.matchfiles(repo, modified):
         oldcontent = base_rev[filename].data()
         newcontent = current_rev[filename].data()
         is_binary = "\0" in oldcontent or "\0" in newcontent
         files[filename] = (oldcontent, newcontent, is_binary, 'M')
 
     # added files
-    for filename in cmdutil.matchfiles(repo, added):
+    for filename in scmutil.matchfiles(repo, added):
         oldcontent = ''
         newcontent = current_rev[filename].data()
         is_binary = "\0" in newcontent
         files[filename] = (oldcontent, newcontent, is_binary, 'A')
 
     # removed files
-    for filename in cmdutil.matchfiles(repo, removed):
+    for filename in scmutil.matchfiles(repo, removed):
         if filename in copymove_info.values():
             # file has been moved or copied
             continue
@@ -123,7 +122,7 @@ def review(ui, repo, *args, **opts):
 
     username = ui.config('review', 'username')
     if not username:
-        username = rietveld.GetEmail(ui)
+        username = GetEmail(ui)
         ui.setconfig('review', 'username', username)
     host_header = ui.config('review', 'host_header')
     account_type = ui.config('review', 'account_type', 'GOOGLE')
