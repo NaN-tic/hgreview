@@ -4,12 +4,42 @@
 import os
 import re
 import sys
+import formatter
+import htmllib
+import urllib
 from hashlib import md5
 
-from mercurial import scmutil, patch, mdiff, copies, node
+from mercurial import scmutil, patch, mdiff, copies, node, commands
 
 from rietveld import (GetEmail, GetRpcServer, CheckReviewer, MAX_UPLOAD_SIZE,
     EncodeMultipartFormData, UploadSeparatePatches, UploadBaseFiles)
+
+
+RAW_PATCH_HREF = re.compile('.*/issue[0-9]+_([0-9])+.diff$')
+
+
+class CodereviewParser(htmllib.HTMLParser):
+
+    def __init__(self):
+        self.patch_urls = []
+        htmllib.HTMLParser.__init__(self, formatter.NullFormatter())
+
+    def start_a(self, attributes):
+        href = dict(attributes).get('href', '')
+        match = RAW_PATCH_HREF.match(href)
+        if not match:
+            return
+        else:
+            patch_num = int(match.groups()[0])
+        self.patch_urls.append((patch_num, href))
+        self.patch_urls.sort(reverse=True)
+
+    @property
+    def patch_url(self):
+        if not self.patch_urls:
+            return None
+        return self.patch_urls[0][1]
+
 
 def _get_issue_file(repo):
     return os.path.join(repo.root, '.hg', 'review_id')
@@ -24,6 +54,38 @@ def _get_server(ui):
         default='http://codereview.appspot.com')
 
 def review(ui, repo, *args, **opts):
+    revs = [opts['rev']] if opts['rev'] else []
+    node1, node2 = scmutil.revpair(repo, revs)
+    modified, added, removed, deleted, unknown, ignored, clean = \
+            repo.status(node1, node2, unknown=True)
+    if opts['fetch']:
+        if modified or added or removed or deleted or unknown:
+            ui.warn('The repository is not clean.', '\n')
+            sys.exit(1)
+        if not opts.get('issue'):
+            issue_id = _get_issue_id(repo)
+            if not issue_id:
+                ui.status('No .hg/review_id found', '\n')
+                return
+        else:
+            issue_id = opts.get('issue')
+        server = _get_server(ui)
+        url = '%s/%s' % (server, issue_id)
+        msg = 'Looking after issue %s patch' % url
+        ui.status(msg, '\n')
+        cp = CodereviewParser()
+        cp.feed(urllib.urlopen(url).read())
+        if not cp.patch_url:
+            ui.status('No raw patch URL found', '\n')
+            return
+        patch_url = '%s%s' % (server, cp.patch_url)
+        commands.import_(ui, repo, patch_url, no_commit=True, base='', strip=1)
+        issue_file = _get_issue_file(repo)
+        if os.path.isfile(issue_file):
+            ui.status('.hg/review_id already exists: not overriding it', '\n')
+        else:
+            open(issue_file, 'w').write(issue_id)
+        return
     if opts['id'] or opts['url']:
         issue_id = _get_issue_id(repo) or ''
         msg = '%s' % issue_id
@@ -32,10 +94,6 @@ def review(ui, repo, *args, **opts):
             msg = '%s/%s/' % (server, msg)
         ui.status(msg, '\n')
         return
-    revs = [opts['rev']] if opts['rev'] else []
-    node1, node2 = scmutil.revpair(repo, revs)
-    modified, added, removed, deleted, unknown, ignored, clean = \
-            repo.status(node1, node2, unknown=True)
     if unknown:
         ui.status('The following files are not added to version control:', '\n\n')
         for filename in unknown:
@@ -190,5 +248,6 @@ cmdtable = {
         ('', 'send_email', None, 'Send notification email to reviewers'),
         ('', 'id', None, 'ouput issue id'),
         ('', 'url', None, 'ouput issue URL'),
+        ('', 'fetch', None, 'Fetch patch and apply to repository'),
     ], "hg review [options]"),
 }
