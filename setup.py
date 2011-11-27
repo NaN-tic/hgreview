@@ -9,7 +9,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name='hgreview',
-    version='0.1',
+    version='0.2',
     author='B2CK',
     author_email='info@b2ck.com',
     url="http://hg.openhex.org/hgreview",
