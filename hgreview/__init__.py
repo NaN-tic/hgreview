@@ -174,7 +174,10 @@ def review(ui, repo, *args, **opts):
         prompt = "Message describing this patch set:"
     else:
         prompt = "New issue subject:"
-    message = ui.prompt(prompt, '')
+    if opts['message']:
+        message = opts['message']
+    else:
+        message = ui.prompt(prompt, '')
     if not message:
         sys.exit(1)
 
@@ -244,6 +247,7 @@ cmdtable = {
     'review': (review, [
         ('r', 'reviewers', [], 'Add reviewers'),
         ('i', 'issue', '', 'Issue number. Defaults to new issue'),
+        ('m', 'message', '', 'Codereview message'),
         ('', 'rev', '', 'Revision number to diff against'),
         ('', 'send_email', None, 'Send notification email to reviewers'),
         ('', 'id', None, 'ouput issue id'),
