@@ -148,7 +148,7 @@ def review(ui, repo, *args, **opts):
     files = {}
 
     # getting informations about copied/moved files
-    copymove_info = copies.copies(repo, base_rev, current_rev, null_rev)[0]
+    copymove_info = copies.mergecopies(repo, base_rev, current_rev, null_rev)[0]
     for newname, oldname in copymove_info.items():
         oldcontent = base_rev[oldname].data()
         newcontent = current_rev[newname].data()

@@ -28,6 +28,6 @@ setup(name='hgreview',
     ],
     license='GPL-3',
     install_requires=[
-        'Mercurial >= 1.5.0',
+        'Mercurial >= 2.1.0',
     ],
 )
