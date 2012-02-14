@@ -7,7 +7,6 @@ import sys
 import tempfile
 import formatter
 import htmllib
-import urllib
 from hashlib import md5
 
 from mercurial import scmutil, patch, mdiff, copies, node, commands
