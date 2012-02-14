@@ -4,6 +4,7 @@
 import os
 import re
 import sys
+import tempfile
 import formatter
 import htmllib
 import urllib
@@ -58,6 +59,17 @@ def review(ui, repo, *args, **opts):
     node1, node2 = scmutil.revpair(repo, revs)
     modified, added, removed, deleted, unknown, ignored, clean = \
             repo.status(node1, node2, unknown=True)
+
+    server = _get_server(ui)
+    username = ui.config('review', 'username')
+    if not username:
+        username = GetEmail(ui)
+        ui.setconfig('review', 'username', username)
+    host_header = ui.config('review', 'host_header')
+    account_type = ui.config('review', 'account_type', 'GOOGLE')
+    rpc_server = GetRpcServer(server, username, host_header, True, account_type,
+        ui)
+
     if opts['fetch']:
         if modified or added or removed or deleted or unknown:
             ui.warn('The repository is not clean.', '\n')
@@ -69,31 +81,37 @@ def review(ui, repo, *args, **opts):
                 return
         else:
             issue_id = opts.get('issue')
-        server = _get_server(ui)
         url = '%s/%s' % (server, issue_id)
         msg = 'Looking after issue %s patch' % url
         ui.status(msg, '\n')
+        url_opener = rpc_server._GetOpener()
         cp = CodereviewParser()
-        cp.feed(urllib.urlopen(url).read())
+        cp.feed(url_opener.open(url).read())
         if not cp.patch_url:
             ui.status('No raw patch URL found', '\n')
             return
         patch_url = '%s%s' % (server, cp.patch_url)
-        commands.import_(ui, repo, patch_url, no_commit=True, base='', strip=1)
-        issue_file = _get_issue_file(repo)
-        if os.path.isfile(issue_file):
-            ui.status('.hg/review_id already exists: not overriding it', '\n')
-        else:
-            open(issue_file, 'w').write(issue_id)
+        with tempfile.NamedTemporaryFile(delete=False) as patch_file:
+            patch_file.write(url_opener.open(patch_url).read())
+            patch_file.flush()
+            commands.import_(ui, repo, patch_file.name, no_commit=True,
+                base='', strip=1)
+            issue_file = _get_issue_file(repo)
+            if os.path.isfile(issue_file):
+                ui.status('.hg/review_id already exists: not overriding it',
+                    '\n')
+            else:
+                open(issue_file, 'w').write(issue_id)
         return
+
     if opts['id'] or opts['url']:
         issue_id = _get_issue_id(repo) or ''
         msg = '%s' % issue_id
         if opts['url']:
-            server = _get_server(ui)
             msg = '%s/%s/' % (server, msg)
         ui.status(msg, '\n')
         return
+
     if unknown:
         ui.status('The following files are not added to version control:', '\n\n')
         for filename in unknown:
@@ -162,7 +180,6 @@ def review(ui, repo, *args, **opts):
         is_binary = "\0" in oldcontent
         files[filename] = (oldcontent, newcontent, is_binary, 'R')
 
-    server = _get_server(ui)
     ui.status('Server used %s' % server, '\n')
 
     issue_file = _get_issue_file(repo)
@@ -181,14 +198,6 @@ def review(ui, repo, *args, **opts):
     if not message:
         sys.exit(1)
 
-    username = ui.config('review', 'username')
-    if not username:
-        username = GetEmail(ui)
-        ui.setconfig('review', 'username', username)
-    host_header = ui.config('review', 'host_header')
-    account_type = ui.config('review', 'account_type', 'GOOGLE')
-    rpc_server = GetRpcServer(server, username, host_header, True, account_type,
-        ui)
     form_fields = [('subject', message)]
     if issue_id:
         form_fields.append(('issue', issue_id))
