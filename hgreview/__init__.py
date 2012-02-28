@@ -10,7 +10,7 @@ import htmllib
 from hashlib import md5
 
 from mercurial.__version__ import version as mercurial_version
-from mercurial import patch, mdiff, copies, node, commands
+from mercurial import patch, mdiff, node, commands
 
 try:
     test = map(int, mercurial_version.split('.')) >= [1, 9]
@@ -20,6 +20,14 @@ if test:
     from mercurial.scmutil import revpair, matchfiles
 else:
     from mercurial.cmdutil import revpair, matchfiles
+try:
+    test = map(int, mercurial_version.split('.')) >= [2, 1]
+except ValueError:
+    test = True
+if test:
+    from mercurial.copies import mergecopies
+else:
+    from mercurial.copies import copies as mergecopies
 
 
 from rietveld import (GetEmail, GetRpcServer, CheckReviewer, MAX_UPLOAD_SIZE,
@@ -159,7 +167,7 @@ def review(ui, repo, *args, **opts):
     files = {}
 
     # getting informations about copied/moved files
-    copymove_info = copies.mergecopies(repo, base_rev, current_rev, null_rev)[0]
+    copymove_info = mergecopies(repo, base_rev, current_rev, null_rev)[0]
     for newname, oldname in copymove_info.items():
         oldcontent = base_rev[oldname].data()
         newcontent = current_rev[newname].data()
