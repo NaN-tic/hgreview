@@ -9,7 +9,18 @@ import formatter
 import htmllib
 from hashlib import md5
 
-from mercurial import scmutil, patch, mdiff, copies, node, commands
+from mercurial.__version__ import version as mercurial_version
+from mercurial import patch, mdiff, copies, node, commands
+
+try:
+    test = map(int, mercurial_version.split('.')) >= [1, 9]
+except ValueError:
+    test = True
+if test:
+    from mercurial.scmutil import revpair, matchfiles
+else:
+    from mercurial.cmdutil import revpair, matchfiles
+
 
 from rietveld import (GetEmail, GetRpcServer, CheckReviewer, MAX_UPLOAD_SIZE,
     EncodeMultipartFormData, UploadSeparatePatches, UploadBaseFiles)
@@ -55,7 +66,7 @@ def _get_server(ui):
 
 def review(ui, repo, *args, **opts):
     revs = [opts['rev']] if opts['rev'] else []
-    node1, node2 = scmutil.revpair(repo, revs)
+    node1, node2 = revpair(repo, revs)
     modified, added, removed, deleted, unknown, ignored, clean = \
             repo.status(node1, node2, unknown=True)
 
@@ -156,21 +167,21 @@ def review(ui, repo, *args, **opts):
         files[newname] = (oldcontent, newcontent, is_binary, 'M')
 
     # modified files
-    for filename in scmutil.matchfiles(repo, modified):
+    for filename in matchfiles(repo, modified):
         oldcontent = base_rev[filename].data()
         newcontent = current_rev[filename].data()
         is_binary = "\0" in oldcontent or "\0" in newcontent
         files[filename] = (oldcontent, newcontent, is_binary, 'M')
 
     # added files
-    for filename in scmutil.matchfiles(repo, added):
+    for filename in matchfiles(repo, added):
         oldcontent = ''
         newcontent = current_rev[filename].data()
         is_binary = "\0" in newcontent
         files[filename] = (oldcontent, newcontent, is_binary, 'A')
 
     # removed files
-    for filename in scmutil.matchfiles(repo, removed):
+    for filename in matchfiles(repo, removed):
         if filename in copymove_info.values():
             # file has been moved or copied
             continue
