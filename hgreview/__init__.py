@@ -44,14 +44,17 @@ class CodereviewParser(htmllib.HTMLParser):
 def _get_issue_file(repo):
     return os.path.join(repo.root, '.hg', 'review_id')
 
+
 def _get_issue_id(repo):
     issue_file = _get_issue_file(repo)
     if os.path.isfile(issue_file):
         return open(issue_file, 'r').read().strip()
 
+
 def _get_server(ui):
     return ui.config('review', 'server',
         default='http://codereview.appspot.com')
+
 
 def review(ui, repo, *args, **opts):
     revs = [opts['rev']] if opts['rev'] else []
@@ -66,8 +69,8 @@ def review(ui, repo, *args, **opts):
         ui.setconfig('review', 'username', username)
     host_header = ui.config('review', 'host_header')
     account_type = ui.config('review', 'account_type', 'GOOGLE')
-    rpc_server = GetRpcServer(server, username, host_header, True, account_type,
-        ui)
+    rpc_server = GetRpcServer(server, username, host_header, True,
+        account_type, ui)
 
     if opts['fetch']:
         if modified or added or removed or deleted or unknown:
@@ -112,7 +115,8 @@ def review(ui, repo, *args, **opts):
         return
 
     if unknown:
-        ui.status('The following files are not added to version control:', '\n\n')
+        ui.status('The following files are not added to version control:',
+            '\n\n')
         for filename in unknown:
             ui.status(filename, '\n')
         cont = ui.prompt("\nAre you sure to continue? (y/N) ", 'N')
@@ -127,10 +131,10 @@ def review(ui, repo, *args, **opts):
             m = re.match(patch.gitre, line)
             if m:
                 # Modify line to make it look like as it comes from svn diff.
-                # With this modification no changes on the server side are required
-                # to make upload.py work with Mercurial repos.
-                # NOTE: for proper handling of moved/copied files, we have to use
-                # the second filename.
+                # With this modification no changes on the server side are
+                # required to make upload.py work with Mercurial repos.
+                # NOTE: for proper handling of moved/copied files, we have to
+                # use the second filename.
                 filename = m.group(2)
                 svndiff.append("Index: %s" % filename)
                 svndiff.append("=" * 67)
@@ -148,7 +152,8 @@ def review(ui, repo, *args, **opts):
     files = {}
 
     # getting informations about copied/moved files
-    copymove_info = copies.mergecopies(repo, base_rev, current_rev, null_rev)[0]
+    copymove_info = copies.mergecopies(repo, base_rev, current_rev,
+        null_rev)[0]
     for newname, oldname in copymove_info.items():
         oldcontent = base_rev[oldname].data()
         newcontent = current_rev[newname].data()
@@ -242,11 +247,13 @@ def review(ui, repo, *args, **opts):
     if not (response_body.startswith('Issue created.')
             or response_body.startswith('Issue updated.')):
         sys.exit(0)
-    issue_id = msg[msg.rfind('/')+1:]
+    issue_id = msg[msg.rfind('/') + 1:]
     open(issue_file, 'w').write(issue_id)
     if not uploaded_diff_file:
-        patches = UploadSeparatePatches(issue_id, rpc_server, patchset, data, ui)
-    UploadBaseFiles(issue_id, rpc_server, patches, patchset, username, files, ui)
+        patches = UploadSeparatePatches(issue_id, rpc_server, patchset, data,
+            ui)
+    UploadBaseFiles(issue_id, rpc_server, patches, patchset, username, files,
+        ui)
     if opts['send_email'] or ui.configbool('review', 'send_email'):
         rpc_server.Send('/%s/mail' % issue_id, payload='')
 
