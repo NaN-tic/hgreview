@@ -82,6 +82,14 @@ def review(ui, repo, *args, **opts):
             repo.status(node1, node2, unknown=True)
 
     server = _get_server(ui)
+    if opts['id'] or opts['url']:
+        issue_id = _get_issue_id(repo) or ''
+        msg = '%s' % issue_id
+        if opts['url']:
+            msg = '%s/%s/' % (server, msg)
+        ui.status(msg, '\n')
+        return
+
     username = ui.config('review', 'username')
     if not username:
         username = GetEmail(ui)
@@ -123,14 +131,6 @@ def review(ui, repo, *args, **opts):
                     '\n')
             else:
                 open(issue_file, 'w').write(issue_id)
-        return
-
-    if opts['id'] or opts['url']:
-        issue_id = _get_issue_id(repo) or ''
-        msg = '%s' % issue_id
-        if opts['url']:
-            msg = '%s/%s/' % (server, msg)
-        ui.status(msg, '\n')
         return
 
     if unknown:
