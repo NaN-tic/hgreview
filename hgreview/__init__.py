@@ -92,7 +92,7 @@ def review(ui, repo, *args, **opts):
         account_type, ui)
 
     if opts['fetch']:
-        if modified or added or removed or deleted or unknown:
+        if modified or added or removed or deleted:
             ui.warn('The repository is not clean.', '\n')
             sys.exit(1)
         if not opts.get('issue'):
