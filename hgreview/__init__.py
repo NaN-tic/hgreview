@@ -76,6 +76,10 @@ def _get_server(ui):
 
 
 def review(ui, repo, *args, **opts):
+    if opts['clean']:
+        os.unlink(_get_issue_file(repo))
+        return
+
     revs = [opts['rev']] if opts['rev'] else []
     node1, node2 = revpair(repo, revs)
     modified, added, removed, deleted, unknown, ignored, clean = \
@@ -278,9 +282,10 @@ def review(ui, repo, *args, **opts):
 # Add option for description, private
 cmdtable = {
     'review': (review, [
-        ('r', 'reviewers', [], 'Add reviewers'),
+        ('c', 'clean', False, 'Remove review info'),
         ('i', 'issue', '', 'Issue number. Defaults to new issue'),
         ('m', 'message', '', 'Codereview message'),
+        ('r', 'reviewers', [], 'Add reviewers'),
         ('', 'rev', '', 'Revision number to diff against'),
         ('', 'send_email', None, 'Send notification email to reviewers'),
         ('', 'id', None, 'ouput issue id'),
