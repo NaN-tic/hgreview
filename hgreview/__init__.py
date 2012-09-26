@@ -5,11 +5,13 @@ import os
 import re
 import sys
 import tempfile
+import itertools
 import formatter
 import htmllib
 from hashlib import md5
 
 from mercurial.__version__ import version as mercurial_version
+from mercurial import hg, extensions, util
 from mercurial import patch, mdiff, node, commands
 
 try:
@@ -75,6 +77,45 @@ def _get_server(ui):
         default='http://codereview.appspot.com')
 
 
+def nested_diff(ui, repo, opts=None):
+    for npath in repo.nested:
+        if npath == '.':
+            nrepo = repo
+        else:
+            lpath = os.path.join(repo.root, npath)
+            lui = ui.copy()
+            lui.readconfig(os.path.join(lpath, '.hg', 'hgrc'))
+            nrepo = hg.repository(lui, lpath)
+        node1, node2 = revpair(nrepo, [])
+        yield patch.diff(nrepo, node1, node2, opts=mdiff.diffopts(git=True),
+            prefix=(npath if npath != '.' else ''))
+
+
+def nested_status(ui, repo):
+    status = {}
+    for npath in repo.nested:
+        if npath == '.':
+            nrepo = repo
+        else:
+            lpath = os.path.join(repo.root, npath)
+            lui = ui.copy()
+            lui.readconfig(os.path.join(lpath, '.hg', 'hgrc'))
+            nrepo = hg.repository(lui, lpath)
+        node1, node2 = revpair(nrepo, [])
+        status[nrepo] = dict(zip(
+            ('modified', 'added', 'removed', 'deleted', 'unknown', 'ignored',
+                'clean'),
+            nrepo.status(node1, node2, unknown=True)))
+    return status
+
+
+def add_nested_info(root_repo, status):
+    root_path = root_repo.root
+    for nrepo, repo_status in status.items():
+        common = len(os.path.commonprefix([root_path, nrepo.root]))
+        status[nrepo]['prefix'] = nrepo.root[common + 1:]
+
+
 def review(ui, repo, *args, **opts):
     issue_file = _get_issue_file(repo)
     if opts['clean']:
@@ -137,17 +178,42 @@ def review(ui, repo, *args, **opts):
                 open(issue_file, 'w').write(issue_id)
         return
 
-    if unknown:
+    is_nested = (opts['nested']
+        and 'hgnested' in extensions.enabled()
+        and len(repo.nested) > 1)
+    revs = [opts['rev']] if opts['rev'] else []
+    if is_nested:
+        if revs:
+            util.Abort('Specifying a revision on a nested repo has no sense')
+        status = nested_status(ui, repo)
+    else:
+        status = {}
+        n1, n2 = revpair(repo, revs)
+        status[repo] = dict(zip(
+                ('modified', 'added', 'removed', 'deleted', 'unknown',
+                    'ignored', 'clean'),
+                repo.status(n1, n2, unknown=True)))
+    add_nested_info(repo, status)
+
+    if any(repo_status.get('unknown') for repo_status in status.values()):
         ui.status('The following files are not added to version control:',
             '\n\n')
-        for filename in unknown:
-            ui.status(filename, '\n')
+        for repo_status in status.values():
+            for fname in repo_status['unknown']:
+                if repo_status['prefix']:
+                    fname = os.path.join(repo_status['prefix'], fname)
+                ui.status(fname, '\n')
         cont = ui.prompt("\nAre you sure to continue? (y/N) ", 'N')
         if cont.lower() not in ('y', 'yes'):
             sys.exit(0)
 
     opts['git'] = True
-    difffiles = patch.diff(repo, node1, node2, opts=mdiff.diffopts(git=True))
+    if not is_nested:
+        difffiles = patch.diff(repo, n1, n2, opts=mdiff.diffopts(git=True))
+    else:
+        difffiles = itertools.chain.from_iterable(nested_diff(ui, repo,
+                opts=mdiff.diffopts(git=True)))
+
     svndiff, filecount = [], 0
     for diffedfile in difffiles:
         for line in diffedfile.split('\n'):
@@ -168,43 +234,53 @@ def review(ui, repo, *args, **opts):
         # No valid patches in hg diff
         sys.exit(1)
     data = '\n'.join(svndiff) + '\n'
-
-    base_rev = repo[node1]
-    current_rev = repo[node2]
-    null_rev = repo[node.nullid]
     files = {}
 
-    # getting informations about copied/moved files
-    copymove_info = mergecopies(repo, base_rev, current_rev, null_rev)[0]
-    for newname, oldname in copymove_info.items():
-        oldcontent = base_rev[oldname].data()
-        newcontent = current_rev[newname].data()
-        is_binary = "\0" in oldcontent or "\0" in newcontent
-        files[newname] = (oldcontent, newcontent, is_binary, 'M')
+    for nrepo, repo_status in status.items():
+        n1, n2 = revpair(nrepo, [])
+        base_rev = nrepo[n1]
+        current_rev = nrepo[n2]
+        null_rev = nrepo[node.nullid]
 
-    # modified files
-    for filename in matchfiles(repo, modified):
-        oldcontent = base_rev[filename].data()
-        newcontent = current_rev[filename].data()
-        is_binary = "\0" in oldcontent or "\0" in newcontent
-        files[filename] = (oldcontent, newcontent, is_binary, 'M')
+        # getting informations about copied/moved files
+        copymove_info = mergecopies(nrepo, base_rev, current_rev, null_rev)[0]
+        for newname, oldname in copymove_info.items():
+            oldcontent = base_rev[oldname].data()
+            newcontent = current_rev[newname].data()
+            is_binary = "\0" in oldcontent or "\0" in newcontent
+            if repo_status['prefix']:
+                newname = os.path.join(repo_status['prefix'], newname)
+            files[newname] = (oldcontent, newcontent, is_binary, 'M')
 
-    # added files
-    for filename in matchfiles(repo, added):
-        oldcontent = ''
-        newcontent = current_rev[filename].data()
-        is_binary = "\0" in newcontent
-        files[filename] = (oldcontent, newcontent, is_binary, 'A')
+        # modified files
+        for filename in matchfiles(nrepo, repo_status['modified']):
+            oldcontent = base_rev[filename].data()
+            newcontent = current_rev[filename].data()
+            is_binary = "\0" in oldcontent or "\0" in newcontent
+            if repo_status['prefix']:
+                filename = os.path.join(repo_status['prefix'], filename)
+            files[filename] = (oldcontent, newcontent, is_binary, 'M')
 
-    # removed files
-    for filename in matchfiles(repo, removed):
-        if filename in copymove_info.values():
-            # file has been moved or copied
-            continue
-        oldcontent = base_rev[filename].data()
-        newcontent = ''
-        is_binary = "\0" in oldcontent
-        files[filename] = (oldcontent, newcontent, is_binary, 'R')
+        # added files
+        for filename in matchfiles(repo, repo_status['added']):
+            oldcontent = ''
+            newcontent = current_rev[filename].data()
+            is_binary = "\0" in newcontent
+            if repo_status['prefix']:
+                filename = os.path.join(repo_status['prefix'], filename)
+            files[filename] = (oldcontent, newcontent, is_binary, 'A')
+
+        # removed files
+        for filename in matchfiles(repo, repo_status['removed']):
+            if filename in copymove_info.values():
+                # file has been moved or copied
+                continue
+            oldcontent = base_rev[filename].data()
+            newcontent = ''
+            is_binary = "\0" in oldcontent
+            if repo_status['prefix']:
+                filename = os.path.join(repo_status['prefix'], filename)
+            files[filename] = (oldcontent, newcontent, is_binary, 'R')
 
     ui.status('Server used %s' % server, '\n')
 
@@ -284,6 +360,7 @@ cmdtable = {
         ('c', 'clean', False, 'Remove review info'),
         ('i', 'issue', '', 'Issue number. Defaults to new issue'),
         ('m', 'message', '', 'Codereview message'),
+        ('n', 'nested', False, 'Use nested diff'),
         ('r', 'reviewers', [], 'Add reviewers'),
         ('', 'rev', '', 'Revision number to diff against'),
         ('', 'send_email', None, 'Send notification email to reviewers'),
