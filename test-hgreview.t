@@ -34,7 +34,7 @@ And fetch the issue:
   $ cd b
   $ hg review --fetch -i $ISSUENUM
   Looking after issue http://localhost:8080/* patch (glob)
-  applying http://localhost:8080/download/issue*.diff (glob)
+  applying /tmp/* (glob)
 
 The two repositories should be identical
 
