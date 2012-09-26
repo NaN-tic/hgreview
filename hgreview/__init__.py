@@ -76,8 +76,9 @@ def _get_server(ui):
 
 
 def review(ui, repo, *args, **opts):
+    issue_file = _get_issue_file(repo)
     if opts['clean']:
-        os.unlink(_get_issue_file(repo))
+        os.unlink(issue_file)
         return
 
     revs = [opts['rev']] if opts['rev'] else []
@@ -129,7 +130,6 @@ def review(ui, repo, *args, **opts):
             patch_file.flush()
             commands.import_(ui, repo, patch_file.name, no_commit=True,
                 base='', strip=1)
-            issue_file = _get_issue_file(repo)
             if os.path.isfile(issue_file):
                 ui.status('.hg/review_id already exists: not overriding it',
                     '\n')
@@ -208,7 +208,6 @@ def review(ui, repo, *args, **opts):
 
     ui.status('Server used %s' % server, '\n')
 
-    issue_file = _get_issue_file(repo)
     issue_id = _get_issue_id(repo) or opts['issue']
     if issue_id:
         if not os.path.isfile(issue_file):
