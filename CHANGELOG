@@ -3,6 +3,7 @@
     Follow mercurial version while keeping compatibility
     Added clean option
     Added nested option
+    Remove review_id file on commit
 
 * Version 0.2 - 2011-11-27
     Initial release

@@ -40,3 +40,10 @@ The two repositories should be identical
 
   $ cd ..
   $ diff -x .hg  -r a b
+
+If we do a commit then the file review_id will disappear:
+
+  $ cd a
+  $ hg commit -m 'Commit change'
+  $ test -e .hg/review_id || echo OK
+  OK

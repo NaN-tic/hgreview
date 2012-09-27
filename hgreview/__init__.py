@@ -13,6 +13,7 @@ from hashlib import md5
 from mercurial.__version__ import version as mercurial_version
 from mercurial import hg, extensions, util
 from mercurial import patch, mdiff, node, commands
+from mercurial import extensions
 
 try:
     test = map(int, mercurial_version.split('.')) >= [1, 9]
@@ -369,3 +370,14 @@ cmdtable = {
         ('', 'fetch', None, 'Fetch patch and apply to repository'),
     ], "hg review [options]"),
 }
+
+
+def review_commit(orig, ui, repo, *pats, **opts):
+    issue_file = _get_issue_file(repo)
+    if os.path.isfile(issue_file):
+        os.unlink(issue_file)
+    orig(ui, repo, *pats, **opts)
+
+
+def uisetup(ui):
+    extensions.wrapcommand(commands.table, 'commit', review_commit)
