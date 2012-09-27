@@ -13,7 +13,6 @@ from hashlib import md5
 from mercurial.__version__ import version as mercurial_version
 from mercurial import hg, extensions, util
 from mercurial import patch, mdiff, node, commands
-from mercurial import extensions
 
 try:
     test = map(int, mercurial_version.split('.')) >= [1, 9]
