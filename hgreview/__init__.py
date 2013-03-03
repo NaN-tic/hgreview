@@ -8,6 +8,9 @@ import tempfile
 import itertools
 import formatter
 import htmllib
+import urlparse
+import urllib
+import urllib2
 from hashlib import md5
 
 from mercurial.__version__ import version as mercurial_version
@@ -372,10 +375,28 @@ cmdtable = {
 
 
 def review_commit(orig, ui, repo, *pats, **opts):
+    orig(ui, repo, *pats, **opts)
+
+    server = _get_server(ui)
+    issue_id = _get_issue_id(repo)
     issue_file = _get_issue_file(repo)
     if os.path.isfile(issue_file):
+        server = _get_server(ui)
+        username = ui.config('review', 'username')
+        if server and username:
+            host_header = ui.config('review', 'host_header')
+            account_type = ui.config('review', 'account_type', 'GOOGLE')
+            rpc_server = GetRpcServer(server, username, host_header, True,
+                account_type, ui)
+            xsrf_request = urllib2.Request(urlparse.urljoin(server,
+                    'xsrf_token'),
+                headers={'X-Requesting-XSRF-Token': 1})
+            xsrf_token = rpc_server.opener.open(xsrf_request).read()
+
+            close_url = urlparse.urljoin(server, '/'.join([issue_id, 'close']))
+            rpc_server.opener.open(close_url,
+                urllib.urlencode({'xsrf_token': xsrf_token}))
         os.unlink(issue_file)
-    orig(ui, repo, *pats, **opts)
 
 
 def uisetup(ui):
