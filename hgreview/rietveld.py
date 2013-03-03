@@ -3,6 +3,7 @@
 # This file contains code from upload.py python script to upload on rietveld
 # servers licensed under the apache license v2.0 (c) Google Inc.
 import os
+import sys
 import urllib
 import urllib2
 import cookielib
@@ -13,8 +14,11 @@ from hashlib import md5
 
 AUTH_ACCOUNT_TYPE = "GOOGLE"
 MAX_UPLOAD_SIZE = 900 * 1024
+COOKIE_FILE = "~/.codereview_upload_cookies"
 
-def UploadBaseFiles(issue, rpc_server, patch_list, patchset, username, files, ui):
+
+def UploadBaseFiles(issue, rpc_server, patch_list, patchset, username, files,
+        ui):
     """Uploads the base files (and if necessary, the current ones as well)."""
 
     def UploadFile(filename, file_id, content, is_binary, status, is_base):
@@ -25,7 +29,8 @@ def UploadBaseFiles(issue, rpc_server, patch_list, patchset, username, files, ui
         else:
             type = "current"
         if len(content) > MAX_UPLOAD_SIZE:
-            ui.status("Not uploading the %s file for %s because it's too large."
+            ui.status(
+                "Not uploading the %s file for %s because it's too large."
                 % (type, filename))
             file_too_large = True
             content = ""
@@ -59,10 +64,13 @@ def UploadBaseFiles(issue, rpc_server, patch_list, patchset, username, files, ui
             base_content = None
             file_id_str = file_id_str[file_id_str.rfind("_") + 1:]
         file_id = int(file_id_str)
-        if base_content != None:
-            UploadFile(filename, file_id, base_content, is_binary, status, True)
-        if new_content != None:
-            UploadFile(filename, file_id, new_content, is_binary, status, False)
+        if base_content is not None:
+            UploadFile(filename, file_id, base_content, is_binary, status,
+                True)
+        if new_content is not None:
+            UploadFile(filename, file_id, new_content, is_binary, status,
+                False)
+
 
 # NOTE: The SplitPatch function is duplicated in engine.py, keep them in sync.
 def SplitPatch(data):
@@ -85,12 +93,13 @@ def SplitPatch(data):
             new_filename = new_filename.strip()
         elif line.startswith('Property changes on:'):
             unused, temp_filename = line.split(':', 1)
-            # When a file is modified, paths use '/' between directories, however
-            # when a property is modified '\' is used on Windows.  Make them the same
-            # otherwise the file shows up twice.
+            # When a file is modified, paths use '/' between directories,
+            # however when a property is modified '\' is used on Windows.
+            # Make them the same otherwise the file shows up twice.
             temp_filename = temp_filename.strip().replace('\\', '/')
             if temp_filename != filename:
-                # File has property changes but no modifications, create a new diff.
+                # File has property changes but no modifications, create a new
+                # diff.
                 new_filename = temp_filename
         if new_filename:
             if filename and diff:
@@ -131,9 +140,11 @@ def UploadSeparatePatches(issue, rpc_server, patchset, data, ui):
         rv.append([lines[1], patch[0]])
     return rv
 
+
 def GetContentType(filename):
-  """Helper to guess the content-type from the filename."""
-  return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    """Helper to guess the content-type from the filename."""
+    return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
 
 def EncodeMultipartFormData(fields, files):
     """Encode form fields for multipart/form-data.
@@ -160,7 +171,8 @@ def EncodeMultipartFormData(fields, files):
         lines.append(value)
     for (key, filename, value) in files:
         lines.append('--' + BOUNDARY)
-        lines.append('Content-Disposition: form-data; name="%s"; filename="%s"' %
+        lines.append(
+            'Content-Disposition: form-data; name="%s"; filename="%s"' %
             (key, filename))
         lines.append('Content-Type: %s' % GetContentType(filename))
         lines.append('')
@@ -172,6 +184,7 @@ def EncodeMultipartFormData(fields, files):
     body = CRLF.join(lines)
     content_type = 'multipart/form-data; boundary=%s' % BOUNDARY
     return content_type, body
+
 
 def CheckReviewer(reviewer):
     """Validate a reviewer -- either a nickname or an email addres.
@@ -185,22 +198,23 @@ def CheckReviewer(reviewer):
         return  # Assume nickname
     parts = reviewer.split("@")
     if len(parts) > 2:
-        ErrorExit("Invalid email address: %r" % reviewer)
+        raise SystemExit("Invalid email address: %r" % reviewer)
     assert len(parts) == 2
     if "." not in parts[1]:
-        ErrorExit("Invalid email address: %r" % reviewer)
+        raise SystemExit("Invalid email address: %r" % reviewer)
+
 
 def GetEmail(ui):
     """Prompts the user for their email address and returns it.
 
-    The last used email address is saved to a file and offered up as a suggestion
-    to the user. If the user presses enter without typing in anything the last
-    used email address is used. If the user enters a new address, it is saved
-    for next time we prompt.
+    The last used email address is saved to a file and offered up as a
+    suggestion to the user. If the user presses enter without typing in
+    anything the last used email address is used. If the user enters a new
+    address, it is saved for next time we prompt.
 
     """
     prompt = "Email (login for uploading)"
-    last_email_file_name = os.path.expanduser("~/.last_codereview_email_address")
+    last_email_file_name = os.path.expanduser(COOKIE_FILE)
     last_email = ""
     if os.path.exists(last_email_file_name):
         try:
@@ -208,7 +222,7 @@ def GetEmail(ui):
             last_email = last_email_file.readline().strip("\n")
             last_email_file.close()
             prompt += " [%s]" % last_email
-        except IOError, e:
+        except IOError:
             pass
     email = ui.prompt(prompt + ':', last_email)
     if email:
@@ -216,21 +230,22 @@ def GetEmail(ui):
             last_email_file = open(last_email_file_name, "w")
             last_email_file.write(email)
             last_email_file.close()
-        except IOError, e:
+        except IOError:
             pass
     else:
         email = last_email
     return email
 
+
 def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
-                 account_type=AUTH_ACCOUNT_TYPE, ui=None):
+        account_type=AUTH_ACCOUNT_TYPE, ui=None):
     """Returns an instance of an AbstractRpcServer.
 
     Args:
       server: String containing the review server URL.
       email: String containing user's email address.
-      host_override: If not None, string containing an alternate hostname to use
-        in the host header.
+      host_override: If not None, string containing an alternate hostname to
+            use in the host header.
       save_cookies: Whether authentication cookies should be saved to disk.
       account_type: Account type for authentication, either 'GOOGLE'
         or 'HOSTED'. Defaults to AUTH_ACCOUNT_TYPE.
@@ -245,8 +260,8 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
     host = (host_override or server).lower()
     if 'localhost' in host:
         if email is None:
-          email = "test@example.com"
-          logging.info("Using debug user %s.  Override with --email" % email)
+            email = "test@example.com"
+            logging.info("Using debug user %s.  Override with --email" % email)
         server = rpc_server_class(
             server,
             lambda: (email, "password"),
@@ -265,7 +280,8 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
         # scoping rules.
         local_email = email
         if local_email is None:
-            local_email = GetEmail("Email (login for uploading to %s)" % server)
+            local_email = GetEmail("Email (login for uploading to %s)"
+                % server)
         password = ui.getpass('Password for %s: ' % local_email, None)
         return (local_email, password)
 
@@ -275,27 +291,30 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
 
 
 class ClientLoginError(urllib2.HTTPError):
-  """Raised to indicate there was an error authenticating with ClientLogin."""
+    """Raised to indicate there was an error authenticating with
+    ClientLogin."""
 
-  def __init__(self, url, code, msg, headers, args):
-    urllib2.HTTPError.__init__(self, url, code, msg, headers, None)
-    self.args = args
-    self.reason = args["Error"]
+    def __init__(self, url, code, msg, headers, args):
+        urllib2.HTTPError.__init__(self, url, code, msg, headers, None)
+        self.args = args
+        self.reason = args["Error"]
 
 
 class AbstractRpcServer(object):
     """Provides a common interface for a simple RPC server."""
 
-    def __init__(self, host, auth_function, host_override=None, extra_headers={},
-                 save_cookies=False, account_type=AUTH_ACCOUNT_TYPE, ui=None):
+    def __init__(self, host, auth_function, host_override=None,
+            extra_headers={}, save_cookies=False,
+            account_type=AUTH_ACCOUNT_TYPE, ui=None):
         """Creates a new HttpRpcServer.
 
         Args:
           host: The host to send requests to.
           auth_function: A function that takes no arguments and returns an
-            (email, password) tuple when called. Will be called if authentication
-            is required.
-          host_override: The host header to send to the server (defaults to host).
+            (email, password) tuple when called. Will be called if
+            authentication is required.
+          host_override: The host header to send to the server
+            (defaults to host).
           extra_headers: A dict of extra headers to append to every request.
           save_cookies: If True, save the authentication cookies to local disk.
             If False, use an in-memory cookiejar instead.  Subclasses must
@@ -330,7 +349,8 @@ class AbstractRpcServer(object):
 
     def _CreateRequest(self, url, data=None):
         """Creates a new urllib request."""
-        logging.debug("Creating request for: '%s' with payload:\n%s", url, data)
+        logging.debug("Creating request for: '%s' with payload:\n%s", url,
+            data)
         req = urllib2.Request(url, data=data)
         if self.host_override:
             req.add_header("Host", self.host_override)
@@ -346,7 +366,8 @@ class AbstractRpcServer(object):
           password: The user's password
 
         Raises:
-          ClientLoginError: If there was an error authenticating with ClientLogin.
+          ClientLoginError: If there was an error authenticating with
+             ClientLogin.
           HTTPError: If there was some other form of HTTP error.
 
         Returns:
@@ -402,8 +423,8 @@ class AbstractRpcServer(object):
             response = e
         if (response.code != 302 or
                 response.info()["location"] != continue_location):
-          raise urllib2.HTTPError(req.get_full_url(), response.code,
-              response.msg, response.headers, response.fp)
+            raise urllib2.HTTPError(req.get_full_url(), response.code,
+                response.msg, response.headers, response.fp)
         self.authenticated = True
 
     def _Authenticate(self):
@@ -412,10 +433,10 @@ class AbstractRpcServer(object):
         The authentication process works as follows:
          1) We get a username and password from the user
          2) We use ClientLogin to obtain an AUTH token for the user
-            (see http://code.google.com/apis/accounts/AuthForInstalledApps.html).
+            (http://code.google.com/apis/accounts/AuthForInstalledApps.html).
          3) We pass the auth token to /_ah/login on the server to obtain an
-            authentication cookie. If login was successful, it tries to redirect
-            us to the URL we provided.
+            authentication cookie. If login was successful, it tries to
+            redirect us to the URL we provided.
 
         If we attempt to access the upload API without first obtaining an
         authentication cookie, it returns a 401 response (or a 302) and
@@ -432,10 +453,12 @@ class AbstractRpcServer(object):
                 if e.reason == "CaptchaRequired":
                     self.ui.status(
                         "Please go to\n"
-                        "https://www.google.com/accounts/DisplayUnlockCaptcha\n"
+                        "https://www.google.com/accounts/"
+                        "DisplayUnlockCaptcha\n"
                         "and verify you are a human.  Then try again.\n"
                         "If you are using a Google Apps account the URL is:\n"
-                        "https://www.google.com/a/yourdomain.com/UnlockCaptcha\n")
+                        "https://www.google.com/a/yourdomain.com/"
+                        "UnlockCaptcha\n")
                     break
                 if e.reason == "NotVerified":
                     self.ui.status("Account not verified.", '\n')
@@ -450,8 +473,8 @@ class AbstractRpcServer(object):
                     self.ui.status("The user account has been disabled.", '\n')
                     break
                 if e.reason == "ServiceDisabled":
-                    self.ui.status("The user's access to the service has been ",
-                        "disabled.\n")
+                    self.ui.status("The user's access to the service has "
+                        "been disabled.\n")
                     break
                 if e.reason == "ServiceUnavailable":
                     self.ui.status("The service is not available; try again"
@@ -467,15 +490,17 @@ class AbstractRpcServer(object):
         """Sends an RPC and returns the response.
 
         Args:
-          request_path: The path to send the request to, eg /api/appversion/create.
+          request_path: The path to send the request to, eg
+            /api/appversion/create.
           payload: The body of the request, or None to send an empty request.
           content_type: The Content-Type header to use.
           timeout: timeout in seconds; default None i.e. no timeout.
             (Note: for large requests on OS X, the timeout doesn't work right.)
           extra_headers: Dict containing additional HTTP headers that should be
-            included in the request (string header names mapped to their values),
-            or None to not include any additional headers.
-          kwargs: Any keyword arguments are converted into query string parameters.
+            included in the request (string header names mapped to their
+            values), or None to not include any additional headers.
+          kwargs: Any keyword arguments are converted into query string
+            parameters.
 
         Returns:
           The response body, as a string.
@@ -520,44 +545,43 @@ class HttpRpcServer(AbstractRpcServer):
     """Provides a simplified RPC-style interface for HTTP requests."""
 
     def _Authenticate(self):
-      """Save the cookie jar after authentication."""
-      super(HttpRpcServer, self)._Authenticate()
-      if self.save_cookies:
-          self.cookie_jar.save()
+        """Save the cookie jar after authentication."""
+        super(HttpRpcServer, self)._Authenticate()
+        if self.save_cookies:
+            self.cookie_jar.save()
 
     def _GetOpener(self):
-      """Returns an OpenerDirector that supports cookies and ignores redirects.
+        """
+        Returns an OpenerDirector that supports cookies.
 
-      Returns:
-        A urllib2.OpenerDirector object.
-      """
-      opener = urllib2.OpenerDirector()
-      opener.add_handler(urllib2.ProxyHandler())
-      opener.add_handler(urllib2.UnknownHandler())
-      opener.add_handler(urllib2.HTTPHandler())
-      opener.add_handler(urllib2.HTTPDefaultErrorHandler())
-      opener.add_handler(urllib2.HTTPSHandler())
-      opener.add_handler(urllib2.HTTPErrorProcessor())
-      if self.save_cookies:
-          self.cookie_file = os.path.expanduser("~/.codereview_upload_cookies")
-          self.cookie_jar = cookielib.MozillaCookieJar(self.cookie_file)
-          if os.path.exists(self.cookie_file):
-              try:
-                  self.cookie_jar.load()
-                  self.authenticated = True
-              except (cookielib.LoadError, IOError):
-                  # Failed to load cookies - just ignore them.
-                  pass
-          else:
-              # Create an empty cookie file with mode 600
-              fd = os.open(self.cookie_file, os.O_CREAT, 0600)
-              os.close(fd)
-          # Always chmod the cookie file
-          os.chmod(self.cookie_file, 0600)
-      else:
-          # Don't save cookies across runs of update.py.
-          self.cookie_jar = cookielib.CookieJar()
-      opener.add_handler(urllib2.HTTPCookieProcessor(self.cookie_jar))
-      return opener
-
-
+        Returns:
+          A urllib2.OpenerDirector object.
+        """
+        opener = urllib2.OpenerDirector()
+        opener.add_handler(urllib2.ProxyHandler())
+        opener.add_handler(urllib2.UnknownHandler())
+        opener.add_handler(urllib2.HTTPHandler())
+        opener.add_handler(urllib2.HTTPDefaultErrorHandler())
+        opener.add_handler(urllib2.HTTPSHandler())
+        opener.add_handler(urllib2.HTTPErrorProcessor())
+        if self.save_cookies:
+            self.cookie_file = os.path.expanduser(COOKIE_FILE)
+            self.cookie_jar = cookielib.MozillaCookieJar(self.cookie_file)
+            if os.path.exists(self.cookie_file):
+                try:
+                    self.cookie_jar.load()
+                    self.authenticated = True
+                except (cookielib.LoadError, IOError):
+                    # Failed to load cookies - just ignore them.
+                    pass
+            else:
+                # Create an empty cookie file with mode 600
+                fd = os.open(self.cookie_file, os.O_CREAT, 0600)
+                os.close(fd)
+            # Always chmod the cookie file
+            os.chmod(self.cookie_file, 0600)
+        else:
+            # Don't save cookies across runs of update.py.
+            self.cookie_jar = cookielib.CookieJar()
+        opener.add_handler(urllib2.HTTPCookieProcessor(self.cookie_jar))
+        return opener
