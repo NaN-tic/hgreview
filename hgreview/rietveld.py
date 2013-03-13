@@ -15,6 +15,7 @@ from hashlib import md5
 AUTH_ACCOUNT_TYPE = "GOOGLE"
 MAX_UPLOAD_SIZE = 900 * 1024
 COOKIE_FILE = "~/.codereview_upload_cookies"
+LAST_EMAIL_FILE = "~/.last_codereview_email_address"
 
 
 def UploadBaseFiles(issue, rpc_server, patch_list, patchset, username, files,
@@ -214,7 +215,7 @@ def GetEmail(ui):
 
     """
     prompt = "Email (login for uploading)"
-    last_email_file_name = os.path.expanduser(COOKIE_FILE)
+    last_email_file_name = os.path.expanduser(LAST_EMAIL_FILE)
     last_email = ""
     if os.path.exists(last_email_file_name):
         try:
