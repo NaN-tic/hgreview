@@ -340,6 +340,7 @@ def review(ui, repo, *args, **opts):
     response_body = rpc_server.Send('/upload', body, content_type=ctype)
 
     lines = response_body.splitlines()
+    patchset = None
     if len(lines) > 1:
         msg = lines[0]
         patchset = lines[1].strip()
@@ -357,8 +358,15 @@ def review(ui, repo, *args, **opts):
             ui)
     UploadBaseFiles(issue_id, rpc_server, patches, patchset, username, files,
         ui)
+
+    payload = {}
     if opts['send_email'] or ui.configbool('review', 'send_email'):
-        rpc_server.Send('/%s/mail' % issue_id, payload='')
+        payload['send_mail'] = 'yes'
+        payload['attach_patch'] = 'yes'
+    payload = urllib.urlencode(payload)
+    rpc_server.Send('/%s/upload_complete/%s' % (issue_id,
+            patchset if patchset else ''),
+        payload=payload)
 
 # Add option for description, private
 cmdtable = {
