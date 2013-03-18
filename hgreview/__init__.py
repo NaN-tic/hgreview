@@ -303,6 +303,9 @@ def review(ui, repo, *args, **opts):
         sys.exit(1)
 
     form_fields = [('subject', message)]
+    repo_guid = repo[0].hex()
+    if repo_guid:
+        form_fields.append(('repo_guid', repo_guid))
     if issue_id:
         form_fields.append(('issue', issue_id))
     if username:

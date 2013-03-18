@@ -4,6 +4,7 @@
 # servers licensed under the apache license v2.0 (c) Google Inc.
 import os
 import sys
+import re
 import urllib
 import urllib2
 import cookielib
@@ -251,18 +252,16 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
         or 'HOSTED'. Defaults to AUTH_ACCOUNT_TYPE.
 
     Returns:
-      A new AbstractRpcServer, on which RPC calls can be made.
+      A new HttpRpcServer, on which RPC calls can be made.
     """
-
-    rpc_server_class = HttpRpcServer
 
     # If this is the dev_appserver, use fake authentication.
     host = (host_override or server).lower()
-    if 'localhost' in host:
+    if re.match(r'(http://)?localhost([:/]|$)', host):
         if email is None:
             email = "test@example.com"
             logging.info("Using debug user %s.  Override with --email" % email)
-        server = rpc_server_class(
+        server = HttpRpcServer(
             server,
             lambda: (email, "password"),
             host_override=host_override,
@@ -285,7 +284,7 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
         password = ui.getpass('Password for %s: ' % local_email, None)
         return (local_email, password)
 
-    return rpc_server_class(server,
+    return HttpRpcServer(server,
         GetUserCredentials, host_override=host_override,
         save_cookies=save_cookies, ui=ui)
 
@@ -297,7 +296,15 @@ class ClientLoginError(urllib2.HTTPError):
     def __init__(self, url, code, msg, headers, args):
         urllib2.HTTPError.__init__(self, url, code, msg, headers, None)
         self.args = args
-        self.reason = args["Error"]
+        self._reason = args["Error"]
+        self.info = args.get('Info', None)
+
+    @property
+    def reason(self):
+        # reason is a property on python 2.7 but a member variable on <=2.6.
+        # self.args is modified so it cannot be used as-is so save the value in
+        # self._reason.
+        return self._reason
 
 
 class AbstractRpcServer(object):
@@ -306,7 +313,7 @@ class AbstractRpcServer(object):
     def __init__(self, host, auth_function, host_override=None,
             extra_headers={}, save_cookies=False,
             account_type=AUTH_ACCOUNT_TYPE, ui=None):
-        """Creates a new HttpRpcServer.
+        """Creates a new AbstractRpcServer.
 
         Args:
           host: The host to send requests to.
@@ -351,7 +358,7 @@ class AbstractRpcServer(object):
         """Creates a new urllib request."""
         logging.debug("Creating request for: '%s' with payload:\n%s", url,
             data)
-        req = urllib2.Request(url, data=data)
+        req = urllib2.Request(url, data=data, headers={'Accept': 'text/plain'})
         if self.host_override:
             req.add_header("Host", self.host_override)
         for key, value in self.extra_headers.iteritems():
@@ -448,9 +455,15 @@ class AbstractRpcServer(object):
                 auth_token = self._GetAuthToken(credentials[0], credentials[1])
             except ClientLoginError, e:
                 if e.reason == "BadAuthentication":
-                    self.ui.status("Invalid username or password.", '\n')
-                    continue
-                if e.reason == "CaptchaRequired":
+                    if e.info == 'InvalidSecondFactor':
+                        self.ui.status(
+                            "Use an application-specific password instead "
+                            "of your regular account password.\n"
+                            "See http://www.google.com/"
+                            "support/accounts/bin/answer.py?answer=185833")
+                    else:
+                        self.ui.status("Invalid username or password.", '\n')
+                elif e.reason == "CaptchaRequired":
                     self.ui.status(
                         "Please go to\n"
                         "https://www.google.com/accounts/"
@@ -460,27 +473,30 @@ class AbstractRpcServer(object):
                         "https://www.google.com/a/yourdomain.com/"
                         "UnlockCaptcha\n")
                     break
-                if e.reason == "NotVerified":
+                elif e.reason == "NotVerified":
                     self.ui.status("Account not verified.", '\n')
                     break
-                if e.reason == "TermsNotAgreed":
+                elif e.reason == "TermsNotAgreed":
                     self.ui.status("User has not agreed to TOS.", '\n')
                     break
-                if e.reason == "AccountDeleted":
+                elif e.reason == "AccountDeleted":
                     self.ui.status("The user account has been deleted.", '\n')
                     break
-                if e.reason == "AccountDisabled":
+                elif e.reason == "AccountDisabled":
                     self.ui.status("The user account has been disabled.", '\n')
                     break
-                if e.reason == "ServiceDisabled":
+                elif e.reason == "ServiceDisabled":
                     self.ui.status("The user's access to the service has "
                         "been disabled.\n")
                     break
-                if e.reason == "ServiceUnavailable":
+                elif e.reason == "ServiceUnavailable":
                     self.ui.status("The service is not available; try again"
                         " later.\n")
                     break
-                raise
+                else:
+                    # Unknown error.
+                    raise
+                continue
             self._GetAuthCookie(auth_token)
             break
 
