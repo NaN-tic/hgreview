@@ -32,8 +32,8 @@ servers
     URL/s of the rietveld instance/s to use. Add in list format although if only one.
     If you have a special port add in the URL
     e.g.:
-        http://codereview.dom1.cat       
-        http://codereview.dom2.org:8000  
+        http://codereview.dom1.cat
+        http://codereview.dom2.org:8000
 
 usernames
     Username/s on the rietveld instance. Add in list format although if only one
@@ -47,7 +47,7 @@ account_types
     format although if only one like servers
 
 cc_header
-    Comma separated value of username / email in CC of the review 
+    Comma separated value of username / email in CC of the review
 
 send_email
     A boolean to indicate if the rietveld instance should or not send emails
