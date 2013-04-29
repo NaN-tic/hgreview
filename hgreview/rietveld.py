@@ -287,7 +287,7 @@ def GetRpcServer(server, email=None, host_override=None, save_cookies=True,
 
     return HttpRpcServer(server,
         GetUserCredentials, host_override=host_override,
-        save_cookies=save_cookies, ui=ui)
+        save_cookies=save_cookies, account_type=account_type, ui=ui)
 
 
 class ClientLoginError(urllib2.HTTPError):
@@ -382,11 +382,13 @@ class AbstractRpcServer(object):
           The authentication token returned by ClientLogin.
         """
         account_type = self.account_type
+        url=self.host
         if self.host.endswith(".google.com"):
             # Needed for use inside Google.
             account_type = "HOSTED"
-        req = self._CreateRequest(
             url="https://www.google.com/accounts/ClientLogin",
+        req = self._CreateRequest(
+            url=url,
             data=urllib.urlencode({
                 "Email": email,
                 "Passwd": password,
@@ -552,6 +554,8 @@ class AbstractRpcServer(object):
                         raise
                     elif e.code == 401 or e.code == 302:
                         self._Authenticate()
+                    elif e.code == 500 and "upload_complete" in request_path:
+                        return "OK, Review uploaded."
                     else:
                         raise
         finally:
@@ -561,10 +565,44 @@ class AbstractRpcServer(object):
 class HttpRpcServer(AbstractRpcServer):
     """Provides a simplified RPC-style interface for HTTP requests."""
 
-    def _Authenticate(self):
+    def _Authenticate(self, login_url="/accounts/login/"):
         """Save the cookie jar after authentication."""
-        super(HttpRpcServer, self)._Authenticate()
+        if self.account_type != 'HOSTED':
+            super(HttpRpcServer, self)._Authenticate()
+        else:
+            login_url = "%s%s" % (self.host, login_url)
+            username, password = self.auth_function()
+            fields = (("user_name", username), ("password", password))
+            req = self._CreateRequest(
+                url=login_url,
+                data=urllib.urlencode({
+                    "username": username,
+                    "password": password,
+                })
+            )
+            try:
+                response = self.opener.open(req)
+                print >>sys.stderr, "Login failed."
+                sys.exit(1)
+            except urllib2.HTTPError, e:
+                if e.code == 302:
+                    self.cookie_jar.extract_cookies(e, req)
+                    if self.save_cookies:
+                        self.cookie_jar.save()
+                    self.authenticated = True
+                    return
+                elif e.code == 403:
+                    body = e.read()
+                    response_dict = dict(x.split("=", 1) for x
+                        in body.split("\n") if x)
+                    raise ClientLoginError(req.get_full_url(), e.code, e.msg,
+                                        e.headers, response_dict)
+                else:
+                    raise
+
         if self.save_cookies:
+            StatusUpdate("Saving authentication cookies to %s" %
+                self.cookie_file)
             self.cookie_jar.save()
 
     def _GetOpener(self):
