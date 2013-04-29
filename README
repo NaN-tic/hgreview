@@ -28,17 +28,23 @@ Options
 In the review section of the .hgrc file you can specify some default
 information:
 
-server
-    URL of the rietveld instance to use
+servers
+    URL/s of the rietveld instance/s to use. Add in list format although if only one.
+    If you have a special port add in the URL
+    e.g.:
+        http://codereview.dom1.cat       
+        http://codereview.dom2.org:8000  
 
-username
-    Username on the rietveld instance
+usernames
+    Username/s on the rietveld instance. Add in list format although if only one
+    like server
 
 host_header
     Alternate hostname to use in the `Host:` header
 
-account_type
-    Account type for authentication either 'GOOGLE' or 'HOSTED'
+account_types
+    Account type/s for authentication either 'GOOGLE' or 'HOSTED'. Add in list
+    format although if only one like servers
 
 cc_header
     Comma separated value of username / email in CC of the review 
