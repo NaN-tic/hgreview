@@ -75,22 +75,26 @@ def _get_issue_id(repo):
         return open(issue_file, 'r').read().strip()
 
 
-def _get_list(ui, list_name, default=""):
-    list_values = ui.config('review', list_name, default=default).split()
-    result = ""
+def _get_list(ui, default=""):
+    list_values = ui.config('review', 'servers', default=default).split('\n')
+    list_values.remove("")
     if len(list_values) == 1:
-        return list_values[0]
+        server, user, host_type = list_values[0].split(' ')
+        return server, user, host_type
     elif len(list_values) > 1:
+        result = ""
         for list_value in list_values:
-            result += "\t(%s) %s\n" % (list_values.index(list_value), list_value)
-        value = ui.prompt("Choose the %s:\n%s type number (default 0):"
-                            % (list_name, result))
+            result += "\t(%s) %s\n" % (list_values.index(list_value),
+                list_value)
+        value = ui.prompt("Choose configuration, (default 0): \n%s"
+            % (result))
         try:
             answ = int(value)
         except:
             answ = 0
         if answ < len(list_values) and answ >= 0:
-            return list_values[answ]
+            server, user, host_type = list_values[answ].split(' ')
+            return server, user, host_type
     return default
 
 
@@ -144,7 +148,10 @@ def review(ui, repo, *args, **opts):
     modified, added, removed, deleted, unknown, ignored, clean = \
             repo.status(node1, node2, unknown=True)
 
-    server = _get_list(ui, 'servers', default='http://codereview.appspot.com')
+    server, username, account_type  = _get_list(ui, default=('http://codereview.appspot.com', None, 'GOOGLE'))
+
+    if not username:
+        username = GetEmail(ui)
     if opts['id'] or opts['url']:
         issue_id = _get_issue_id(repo) or ''
         msg = '%s' % issue_id
@@ -153,12 +160,7 @@ def review(ui, repo, *args, **opts):
         ui.status(msg, '\n')
         return
 
-    username = _get_list(ui, 'usernames')
-    if not username:
-        username = GetEmail(ui)
-        ui.setconfig('review', 'username', username)
     host_header = ui.config('review', 'host_header')
-    account_type = _get_list(ui, 'account_types', default='GOOGLE')
     rpc_server = GetRpcServer(server, username, host_header, True,
         account_type, ui)
 
@@ -406,12 +408,9 @@ def review_commit(orig, ui, repo, *pats, **opts):
     issue_id = _get_issue_id(repo)
     issue_file = _get_issue_file(repo)
     if os.path.isfile(issue_file):
-        server = _get_list(ui, 'servers',
-            default='http://codereview.appspot.com')
-        username = _get_list(ui, 'usernames')
+        server, username, account_type  = _get_list(ui, default=('http://codereview.appspot.com', username, 'GOOGLE'))
         if server and username:
             host_header = ui.config('review', 'host_header')
-            account_type = _get_list(ui, 'account_types', default='GOOGLE')
             rpc_server = GetRpcServer(server, username, host_header, True,
                 account_type, ui)
             xsrf_request = urllib2.Request(urlparse.urljoin(server,
