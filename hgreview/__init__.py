@@ -148,7 +148,8 @@ def review(ui, repo, *args, **opts):
     modified, added, removed, deleted, unknown, ignored, clean = \
             repo.status(node1, node2, unknown=True)
 
-    server, username, account_type  = _get_list(ui, default=('http://codereview.appspot.com', None, 'GOOGLE'))
+    server, username, account_type = _get_list(ui,
+        default=('http://codereview.appspot.com', None, 'GOOGLE'))
 
     if not username:
         username = GetEmail(ui)
@@ -408,7 +409,8 @@ def review_commit(orig, ui, repo, *pats, **opts):
     issue_id = _get_issue_id(repo)
     issue_file = _get_issue_file(repo)
     if os.path.isfile(issue_file):
-        server, username, account_type  = _get_list(ui, default=('http://codereview.appspot.com', username, 'GOOGLE'))
+        server, username, account_type = _get_list(ui,
+            default=('http://codereview.appspot.com', None, 'GOOGLE'))
         if server and username:
             host_header = ui.config('review', 'host_header')
             rpc_server = GetRpcServer(server, username, host_header, True,
