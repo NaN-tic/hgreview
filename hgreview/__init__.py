@@ -179,7 +179,9 @@ def review(ui, repo, *args, **opts):
         url = '%s/%s' % (server, issue_id)
         msg = 'Looking after issue %s patch' % url
         ui.status(msg, '\n')
-        if not rpc_server.authenticated:
+
+        #TODO: change authentication.
+        if account_type != 'GOOGLE':
             rpc_server._Authenticate()
 
         url_opener = rpc_server._GetOpener()
