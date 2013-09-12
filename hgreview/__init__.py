@@ -179,7 +179,12 @@ def review(ui, repo, *args, **opts):
         url = '%s/%s' % (server, issue_id)
         msg = 'Looking after issue %s patch' % url
         ui.status(msg, '\n')
+        if not rpc_server.authenticated:
+            rpc_server._Authenticate()
+
         url_opener = rpc_server._GetOpener()
+
+
         cp = CodereviewParser()
         cp.feed(url_opener.open(url).read())
         if not cp.patch_url:
